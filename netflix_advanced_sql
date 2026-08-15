@@ -1,0 +1,267 @@
+USE netflix;
+
+---1)Find the list of all 'TV Shows' that have 5 or more seasons.
+
+select
+    title,
+    duration
+    from netflix_titles
+    where type = 'tv show'
+    and CAST(substring_index(duration,' ',1)as unsigned) >=5
+    ORDER BY CAST(SUBSTRING_INDEX(duration, ' ', 1) AS UNSIGNED) DESC;
+    
+----2)List all the movies produced in 'India' that belong to the 'Comedies' category.
+
+select
+    title
+    from netflix_titles
+    where type = 'movie'
+    and country LIKE "%india%"
+    and listed_in LIKE "%comedies%";  
+    
+-----3)Who are the top 5 directors with the highest number of directed movies (excluding
+'Not Given')?
+
+SELECT
+    director,
+    COUNT(*) AS movie_count
+    FROM netflix_titles
+    WHERE type = 'Movie'
+    AND director IS NOT NULL
+    AND TRIM(director) <> ''
+    AND LOWER(TRIM(director)) <> 'not given'
+GROUP BY director
+ORDER BY movie_count DESC
+LIMIT 5;    
+
+-----4)In which year did Netflix add the highest amount of content to its platform?
+
+SELECT
+    YEAR(STR_TO_DATE(date_added, '%M %d, %Y')) AS year_added,
+    COUNT(*) AS total_content
+    FROM netflix_titles
+    WHERE date_added IS NOT NULL
+    AND TRIM(date_added) <> ''
+GROUP BY YEAR(STR_TO_DATE(date_added, '%M %d, %Y'))
+ORDER BY total_content DESC
+LIMIT 1;
+
+-----5)Which are the 5 oldest movies released in India on Netflix?
+
+SELECT
+    title,
+    release_year,
+    country
+FROM netflix_titles
+WHERE type = 'Movie'
+  AND country LIKE '%India%'
+ORDER BY release_year ASC
+LIMIT 5;  
+
+-----6)Find the titles of all movies listed as 'Documentaries' that were released after the
+year 2015.
+
+SELECT
+    title,
+    release_year
+FROM netflix_titles
+WHERE type = 'Movie'
+  AND listed_in LIKE '%Documentaries%'
+  AND release_year > 2015
+ORDER BY release_year desc; 
+
+----7)Which movie has the longest duration in minutes on Netflix?
+select
+    title,
+    duration
+    from netflix_titles
+    where type = 'movie'
+    and duration like "%min%"
+    order by CAST(substring_index(duration, ' ',1)as unsigned) desc
+    limit 1;   
+    
+----8)What is the most recently released movie for each country?
+
+SELECT
+    country,
+    title,
+    release_year
+FROM (
+    SELECT
+        country,
+        title,
+        release_year,
+        RANK() 
+        OVER (PARTITION BY country
+            ORDER BY release_year DESC) AS rnk
+    FROM netflix_titles
+    WHERE type = 'Movie'
+      AND country IS NOT NULL
+      AND TRIM(country) <> '') AS ranked_movies
+WHERE rnk = 1
+ORDER BY country;   
+
+----9)Identify the release years in which more than 50 movies from India were released.    
+ 
+ SELECT
+    release_year,
+    COUNT(*) AS movie_count
+FROM netflix_titles
+WHERE type = 'Movie'
+  AND country LIKE '%India%'
+GROUP BY release_year
+HAVING COUNT(*) > 50
+ORDER BY release_year;  
+
+----10)Find the top 3 genres by average release year.
+
+WITH genre_analysis AS (
+    SELECT
+        listed_in,
+        AVG(release_year) AS avg_release_year
+    FROM netflix_titles
+    WHERE listed_in IS NOT NULL
+    GROUP BY listed_in
+)
+SELECT *
+FROM genre_analysis
+ORDER BY avg_release_year DESC
+LIMIT 3;
+
+----11)Compare Netflix content added each year with the previous year.
+
+WITH yearly_content AS (
+    SELECT
+        YEAR(STR_TO_DATE(date_added, '%M %d, %Y')) AS year_added,
+        COUNT(*) AS total_content
+    FROM netflix_titles
+    WHERE date_added IS NOT NULL
+    GROUP BY YEAR(STR_TO_DATE(date_added, '%M %d, %Y'))
+)
+
+----12)Find the top 5 directors who have directed the highest number of Netflix movies, along with the total number of movies and the latest release year of each director.
+
+WITH director_data AS (
+    SELECT
+        n.show_id,
+        n.title,
+        n.release_year,
+        TRIM(director_name) AS director
+    FROM netflix_titles n
+    JOIN JSON_TABLE(
+        CONCAT(
+            '["',
+            REPLACE(
+                REPLACE(n.director, '"', '\\"'),
+                ', ',
+                '","'
+            ),
+            '"]'
+        ),
+        '$[*]' COLUMNS (
+            director_name VARCHAR(255) PATH '$'
+        )
+    ) AS d
+    WHERE n.type = 'Movie'
+      AND n.director IS NOT NULL
+      AND TRIM(n.director) <> ''
+      AND LOWER(TRIM(n.director)) <> 'not given'
+)
+
+SELECT
+    director,
+    COUNT(DISTINCT show_id) AS total_movies,
+    MAX(release_year) AS latest_release_year
+FROM director_data
+GROUP BY director
+ORDER BY total_movies DESC
+LIMIT 5;
+
+-- 13)Find the latest movie for each release year
+
+WITH ranked_movies AS (
+    SELECT
+        title,
+        release_year,
+        ROW_NUMBER() OVER (
+            PARTITION BY release_year
+            ORDER BY release_year DESC, title
+        ) AS row_num
+    FROM netflix_titles
+    WHERE type = 'Movie'
+)
+SELECT
+    title, 
+     release_year
+FROM ranked_movies
+WHERE row_num = 1
+ORDER BY release_year DESC;
+
+-- 14)Rank countries based on the number of Netflix titles
+
+WITH country_counts AS (
+    SELECT
+        country,
+        COUNT(*) AS total_titles
+    FROM netflix_titles
+    WHERE country IS NOT NULL
+      AND TRIM(country) <> ''
+    GROUP BY country
+)
+SELECT
+    country,
+    total_titles,
+    DENSE_RANK() OVER (
+        ORDER BY total_titles DESC
+    ) AS country_rank
+FROM country_counts
+ORDER BY country_rank
+LIMIT 10;
+
+-- 15)Compare Netflix content added each year with the previous year
+
+WITH yearly_content AS (
+    SELECT
+        YEAR(STR_TO_DATE(date_added, '%M %d, %Y')) AS year_added,
+        COUNT(*) AS total_content
+    FROM netflix_titles
+    WHERE date_added IS NOT NULL
+      AND TRIM(date_added) <> ''
+    GROUP BY YEAR(STR_TO_DATE(date_added, '%M %d, %Y'))
+)
+SELECT
+    year_added,
+    total_content,
+    LAG(total_content) OVER (
+        ORDER BY year_added
+    ) AS previous_year_content
+FROM yearly_content
+ORDER BY year_added;
+
+-- 16)Categorize movies based on duration
+
+SELECT
+    title,
+    duration,
+    CASE
+        WHEN CAST(SUBSTRING_INDEX(duration, ' ', 1) AS UNSIGNED) < 60
+            THEN 'Short'
+        WHEN CAST(SUBSTRING_INDEX(duration, ' ', 1) AS UNSIGNED) <= 120
+            THEN 'Medium'
+        ELSE 'Long'
+    END AS duration_category
+FROM netflix_titles
+WHERE type = 'Movie'
+  AND duration IS NOT NULL;
+  
+  -- 17)Check missing values
+
+SELECT
+    SUM(CASE WHEN director IS NULL OR TRIM(director) = '' THEN 1 ELSE 0 END) AS missing_director,
+    SUM(CASE WHEN country IS NULL OR TRIM(country) = '' THEN 1 ELSE 0 END) AS missing_country,
+    SUM(CASE WHEN rating IS NULL OR TRIM(rating) = '' THEN 1 ELSE 0 END) AS missing_rating,
+    SUM(CASE WHEN date_added IS NULL OR TRIM(date_added) = '' THEN 1 ELSE 0 END) AS missing_date_added,
+    SUM(CASE WHEN duration IS NULL OR TRIM(duration) = '' THEN 1 ELSE 0 END) AS missing_duration
+FROM netflix_titles;
+    
+
