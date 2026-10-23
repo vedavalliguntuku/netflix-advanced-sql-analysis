@@ -1,64 +1,108 @@
-# Netflix Advanced SQL Analysis
+# Netflix Content Analysis using Advanced SQL
 
-## 📌 Project Overview
+An end-to-end SQL analysis of the Netflix titles dataset (8,807 records), answering 17 business questions on content strategy, regional trends, genres and data quality. The project moves from basic filtering to window functions, CTEs and JSON-based data transformation.
 
-This project analyzes the Netflix titles dataset using advanced SQL techniques to identify content trends, release patterns, ratings, countries, directors, and other business insights.
+## Project Overview
 
-The project demonstrates practical SQL skills used in real-world data analytics.
+| | |
+|---|---|
+| **Objective** | Extract insights on Netflix's catalogue: what content exists, where it comes from, and how it has grown over time |
+| **Database** | MySQL 8.0+ |
+| **Dataset** | `netflix_titles.csv`: 8,807 rows, 12 columns |
+| **Deliverable** | `netflix_advanced_sql.sql`: 17 documented queries |
 
-## 🛠️ Tools & Technologies
+## Dataset Columns
 
-- MySQL
-- SQL
-- Netflix Titles Dataset
+`show_id` · `type` · `title` · `director` · `cast` · `country` · `date_added` · `release_year` · `rating` · `duration` · `listed_in` · `description`
 
-## 📊 SQL Concepts Covered
+## Business Questions Answered
 
-- SELECT & WHERE
-- GROUP BY & HAVING
-- Aggregate Functions
-- String Functions
-- Date Functions
-- Subqueries
-- CTEs
-- JOINs
-- Window Functions
-- RANK()
-- ROW_NUMBER()
-- DENSE_RANK()
-- LAG()
-- PARTITION BY
-- CASE WHEN
-- Data Quality Checks
-- JSON_TABLE()
+**Content and catalogue**
+- Which TV shows have 5 or more seasons?
+- Which movie has the longest runtime?
+- How can movies be categorised as Short, Medium or Long?
+- What are the top genres by average release year?
 
-## 🔍 Key Business Questions
+**Regional analysis**
+- Which Indian movies belong to the Comedies category?
+- What are the 5 oldest movies released in India?
+- In which years were more than 50 Indian movies released?
+- What is the most recent movie for each country?
+- How do countries rank by number of titles?
 
-- Which content rating is most common on Netflix?
-- Which directors have directed the most movies?
-- Which year had the highest amount of content added?
-- Which countries have the highest number of titles?
-- What are the oldest movies from India?
-- Which years had more than 50 Indian movies?
-- What are the latest movies by rating?
-- How has Netflix content changed over time?
+**Talent analysis**
+- Who are the top 5 directors by number of movies?
+- How do director counts change after splitting multi-director titles into individual rows?
 
-## 📈 Key Insights
+**Growth trends**
+- In which year did Netflix add the most content?
+- How does content added each year compare with the previous year?
+- What is the latest movie for each release year?
 
-- TV-MA is one of the most common content ratings.
-- Netflix's content library has expanded significantly over the years.
-- Movies represent a large portion of the Netflix catalog.
-- India is one of the major countries represented in the dataset.
+**Data quality**
+- How many missing values are there in the key columns?
 
-## 📁 Project Structure
+## SQL Skills Demonstrated
 
-```text
-netflix-advanced-sql-analysis/
-│
-├── README.md
-├── sql/
-│   └── netflix_advanced_sql.sql
-├── data/
-│   └── netflix_titles.csv
-└── screenshots/
-    └── results/
+| Category | Techniques |
+|---|---|
+| **Querying** | `SELECT`, `WHERE`, `LIKE`, `ORDER BY`, `LIMIT` |
+| **Aggregation** | `GROUP BY`, `HAVING`, `COUNT`, `AVG`, `MAX`, conditional `SUM` |
+| **Window functions** | `RANK`, `DENSE_RANK`, `ROW_NUMBER`, `LAG` |
+| **Advanced SQL** | CTEs, subqueries, `CASE WHEN`, `JSON_TABLE` |
+| **Data cleaning** | `TRIM`, `NULL` and blank-value handling, `STR_TO_DATE`, `CAST`, `SUBSTRING_INDEX` |
+
+## Featured Query
+
+**Top 5 directors, handling titles with multiple directors.** Many titles list several directors in one cell, so this query splits them into separate rows before counting.
+
+```sql
+WITH director_data AS (
+    SELECT
+        n.show_id,
+        n.release_year,
+        TRIM(d.director_name) AS director
+    FROM netflix_titles n
+    JOIN JSON_TABLE(
+        CONCAT('["', REPLACE(REPLACE(n.director, '"', '\\"'), ', ', '","'), '"]'),
+        '$[*]' COLUMNS (director_name VARCHAR(255) PATH '$')
+    ) AS d
+    WHERE n.type = 'Movie'
+      AND n.director IS NOT NULL
+      AND TRIM(n.director) <> ''
+      AND LOWER(TRIM(n.director)) <> 'not given'
+)
+SELECT
+    director,
+    COUNT(DISTINCT show_id) AS total_movies,
+    MAX(release_year)       AS latest_release_year
+FROM director_data
+GROUP BY director
+ORDER BY total_movies DESC
+LIMIT 5;
+```
+
+## Data Cleaning Approach
+
+- Treated both `NULL` and blank strings as missing values.
+- Excluded placeholder values such as "Not Given" from director analysis.
+- Converted text fields (`date_added`, `duration`) into dates and numbers for analysis.
+- Split multi-value columns (directors) into one row per value to avoid miscounting.
+
+## How to Run
+
+1. Create the database: `CREATE DATABASE netflix;`
+2. Import `netflix_titles.csv` into a table named `netflix_titles`.
+3. Open `netflix_advanced_sql.sql` in MySQL Workbench or the MySQL CLI and run the queries.
+
+## Repository Structure
+
+```
+├── netflix_advanced_sql.sql   # All 17 queries, numbered and commented
+├── netflix_titles.csv         # Source dataset
+└── README.md
+```
+
+## Contact
+
+**GitHub:** [vedavalliguntuku](https://github.com/vedavalliguntuku)
